@@ -1,0 +1,17 @@
+{
+  "name": "개역개정",
+  "short_name": "개역개정",
+  "description": "개역개정 테스트",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#46cdcf",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
