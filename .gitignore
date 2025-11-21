@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# etc
+index.nginx-debian.html
+BibleViewer.old.jsx

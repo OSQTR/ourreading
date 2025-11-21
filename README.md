@@ -1,16 +1,45 @@
-# React + Vite
+# 개역개정
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+### 성경을 출력하는 단순 페이지 입니다.
 
-Currently, two official plugins are available:
+대한성서공회에서 따로 DB나 API가 제공되지 않기 때문에, 데이터를 직접 확보해야 한다고 안내받았습니다.  
+하여, 2025년 11월 21일 대한성서공회 사이트를 크롤링해 데이터를 확보했습니다.  
+아래는 꼭 확인해야 할 항목입니다.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- ⚠️ 코드 편집은 자유롭게 하시되, 포함된 데이터는 개인적인 목적으로만 사용 가능합니다.
 
-## React Compiler
+- ⚠️ 만일 배포를 하고싶으시다면, 사용권은 [대한성서공회](https://www.bskorea.or.kr/)로 문의 하셔야 합니다.  
+  ( 웹/앱 게시는 월 100만원이라고 답변을 들었습니다. )
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- ⚠️ 데이터를 확인하긴 했지만, 순수성이 보장되지 않습니다.
 
-## Expanding the ESLint configuration
+public/data 디렉토리 안에 해당 데이터 파일들이 위치해 있습니다.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+---
+
+### 프로젝트 목적/이유
+
+1. 개인적으로 IndexedDB를 사용해보고 싶었습니다.
+2. 진행될 프로젝트를 위해서, 데이터를 미리 확보해야만 했습니다.
+
+---
+
+### 배포시 주의사항
+
+1. 반드시 [대한성서공회](https://www.bskorea.or.kr/)로 문의 하셔야 합니다.
+2. 1번을 꼭 하셔야 합니다.
+
+---
+
+### 미리보기 테스트
+
+[여기](https://ourreading.vercel.app/)에서 확인 가능합니다.  
+(몇 개의 테스트 이후 삭제할 것이므로 접속이 안될 수 있습니다.)
+
+---
+
+혹시 문제생기거나 질문이 있으면 아래로 문의주세요.  
+그럼 이만. 👋
+
+파일 만든사람: [osqtr](https://open.kakao.com/me/osqtr)  
+이메일: clecat1005@gmail.com
