@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import useBibleData from "./hooks/useBibleData";
 import Footer from "./Footer";
 
 const Container = styled.div`
@@ -106,51 +107,59 @@ const Select = styled.select`
   }
 `;
 
-const BibleViewer = ({ bibleData }) => {
+const BibleViewer = () => {
+  // 훅을 사용하여 데이터 상태와 로딩 함수를 가져옵니다.
+  const { books, currentBookData, loadBook, isLoading } = useBibleData();
+
+  // books 배열의 index (0~65)
   const [currentBookIdx, setCurrentBookIdx] = useState(0);
+  // 현재 책 내의 chapter index
   const [currentChapterIdx, setCurrentChapterIdx] = useState(0);
-  const [chapters, setChapters] = useState([]);
 
+  // 현재 선택된 책의 '코드' (meta.json 기준)
+  const currentBookCode = books[currentBookIdx]?.[0];
+
+  // 책이 바뀌면 (currentBookIdx 변경), 해당 책 데이터를 로드하는 효과
   useEffect(() => {
-    if (!bibleData) return;
+    // books가 로드되고, 현재 책 코드가 유효할 때만 실행
+    if (currentBookCode !== undefined) {
+      loadBook(currentBookCode); // 캐시 또는 네트워크에서 로드
+      setCurrentChapterIdx(0); // 새 책 로딩 시 항상 1장으로 초기화
+    }
+  }, [currentBookCode, loadBook]);
 
-    // 현재 책에 속한 모든 장 찾기
-    const bookChapters = bibleData.chapters.filter(
-      (ch) => ch[0] === currentBookIdx
-    );
-    setChapters(bookChapters);
-    setCurrentChapterIdx(0);
-  }, [currentBookIdx, bibleData]);
-
-  if (!bibleData || bibleData.books.length === 0) {
-    return <Container>데이터를 불러올 수 없습니다.</Container>;
+  // 메타데이터 로딩 중이거나, 책 목록이 비어있을 때
+  if (isLoading || books.length === 0) {
+    return <Container>책 목록 데이터를 불러오는 중입니다.</Container>;
   }
 
-  const books = bibleData.books;
-  const currentBook = books[currentBookIdx];
-  const [bookCode, bookName] = currentBook;
-  const currentChapter = chapters[currentChapterIdx];
-  const [, verses] = currentChapter || [, []];
+  // 현재 책의 장(chapters)과 절(verses) 데이터
+  const chapters = currentBookData?.chapters || [];
+  const verses = chapters[currentChapterIdx] || [];
+  const chaptersLength = chapters.length;
 
+  // 현재 책 데이터가 로딩되지 않았을 때 (책 선택 후 로딩 중일 때)
+  if (!currentBookData) {
+    return (
+      <Container>
+        {books[currentBookIdx][1]} 데이터를 로딩 중입니다...
+      </Container>
+    );
+  }
+
+  // --- 핸들러 함수 ---
   const handlePrevChapter = () => {
     if (currentChapterIdx > 0) {
       setCurrentChapterIdx(currentChapterIdx - 1);
-      window.scrollTo({
-        top: 0,
-        left: 0,
-        behavior: "smooth", // 부드러운 스크롤 애니메이션 활성화
-      });
+      window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
     }
   };
 
   const handleNextChapter = () => {
-    if (currentChapterIdx < chapters.length - 1) {
+    if (currentChapterIdx < chaptersLength - 1) {
+      // chaptersLength 사용
       setCurrentChapterIdx(currentChapterIdx + 1);
-      window.scrollTo({
-        top: 0,
-        left: 0,
-        behavior: "smooth", // 부드러운 스크롤 애니메이션 활성화
-      });
+      window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
     }
   };
 
@@ -173,7 +182,9 @@ const BibleViewer = ({ bibleData }) => {
             <Select
               value={currentChapterIdx}
               onChange={(e) => setCurrentChapterIdx(Number(e.target.value))}
+              disabled={!currentBookData} // 책 데이터 로딩 전에는 장 선택 비활성화
             >
+              {/* chapters 배열 길이만큼 옵션 생성 */}
               {chapters.map((_, idx) => (
                 <option key={idx} value={idx}>
                   {idx + 1}장
@@ -181,6 +192,7 @@ const BibleViewer = ({ bibleData }) => {
               ))}
             </Select>
           </Selector>
+
           <Navigation>
             <NavButton
               onClick={handlePrevChapter}
@@ -188,9 +200,10 @@ const BibleViewer = ({ bibleData }) => {
             >
               <ChevronLeft size={20} />
             </NavButton>
+
             <NavButton
               onClick={handleNextChapter}
-              disabled={currentChapterIdx === chapters.length - 1}
+              disabled={currentChapterIdx === chaptersLength - 1} // chaptersLength 사용
             >
               <ChevronRight size={20} />
             </NavButton>
@@ -206,9 +219,9 @@ const BibleViewer = ({ bibleData }) => {
           </VerseContainer>
         ))}
       </Content>
+
       <Footer />
     </Container>
   );
 };
-
 export default BibleViewer;
