@@ -1,64 +1,79 @@
 // src/hooks/useBibleData.js
 
 import { useState, useEffect, useCallback } from "react";
-import { getBookFromDB, saveBookToDB } from "../utils/indexedDB"; // 4번에서 구현한 DB 유틸리티
+import { getBookFromDB, saveBookToDB, getReadingProgress } from "../utils/db";
 
 const useBibleData = () => {
-  const [books, setBooks] = useState([]); // [코드, 이름] 형태의 모든 책 목록 (메타데이터)
-  const [currentBookData, setCurrentBookData] = useState(null); // 현재 선택된 책의 전체 장/절 데이터
+  const [books, setBooks] = useState([]); // 모든 책 목록
+  const [currentBookData, setCurrentBookData] = useState(null); // 현재 책 데이터
   const [isLoading, setIsLoading] = useState(true);
+  const [savedProgress, setSavedProgress] = useState(null); // 저장된 읽기 위치
 
-  // 1. 메타데이터(책 목록) 로딩 - 최초 1회 실행
+  // 1. 앱 시작: 메타데이터 + 저장된 진행 상태 로드
   useEffect(() => {
-    // Vercel 정적 배포 기준, public/data/meta.json 경로 가정
-    fetch("/data/meta.json")
-      .then((res) => res.json())
-      .then((data) => {
-        setBooks(data.books);
+    const initialize = async () => {
+      try {
+        // 메타데이터 로드
+        const metaRes = await fetch("/data/meta.json");
+        const metaData = await metaRes.json();
+        setBooks(metaData.books);
+
+        // DB에서 저장된 읽기 위치 로드
+        const progress = await getReadingProgress();
+        setSavedProgress(progress);
+
+        console.log("✓ App initialized");
+      } catch (err) {
+        console.error("Initialization error:", err);
+      } finally {
         setIsLoading(false);
-      })
-      .catch((err) => {
-        console.error("메타데이터 로딩 실패:", err);
-        setIsLoading(false);
-      });
+      }
+    };
+
+    initialize();
   }, []);
 
-  // 2. 책 데이터 로딩 (캐싱 및 분할 로딩 로직)
+  // 2. 책 데이터 로드 (캐싱)
   const loadBook = useCallback(
     async (bookCode) => {
-      if (currentBookData?.bookCode === bookCode) return; // 이미 로딩된 데이터면 무시
+      if (currentBookData?.bookCode === bookCode) return;
 
-      setCurrentBookData(null); // 새로운 책 로딩 시작
+      setCurrentBookData(null);
 
-      // 1) IndexedDB에서 데이터 확인
-      let bookData = await getBookFromDB(bookCode);
-
-      if (bookData) {
-        console.log(`Book ${bookCode} loaded from IndexedDB cache.`);
-        setCurrentBookData(bookData);
-        return;
-      }
-
-      // 2) IndexedDB에 없으면 네트워크 Fetch 요청 (분할 로딩)
       try {
-        console.log(`Book ${bookCode} fetching from network...`);
+        // DB에서 먼저 확인
+        let bookData = await getBookFromDB(bookCode);
+
+        if (bookData) {
+          console.log(`✓ Book ${bookCode} loaded from cache`);
+          setCurrentBookData(bookData);
+          return;
+        }
+
+        // DB에 없으면 네트워크에서 로드
+        console.log(`Fetching book ${bookCode} from network...`);
         const res = await fetch(`/data/book_${bookCode}.json`);
-        if (!res.ok) throw new Error("Network response was not ok");
+        if (!res.ok) throw new Error("Network response failed");
 
         bookData = await res.json();
 
-        // 3) 데이터를 IndexedDB에 저장하고 상태 업데이트
+        // DB에 저장
         await saveBookToDB(bookCode, bookData);
-        console.log(`Book ${bookCode} saved to IndexedDB.`);
         setCurrentBookData(bookData);
       } catch (error) {
-        console.error(`Book ${bookCode} 로드 실패:`, error);
+        console.error(`Book ${bookCode} load failed:`, error);
       }
     },
     [currentBookData]
-  ); // currentBookData를 의존성에 넣어 불필요한 재로딩 방지
+  );
 
-  return { books, currentBookData, loadBook, isLoading };
+  return {
+    books,
+    currentBookData,
+    loadBook,
+    isLoading,
+    savedProgress, // 저장된 읽기 위치 반환
+  };
 };
 
 export default useBibleData;

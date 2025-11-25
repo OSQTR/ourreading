@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from "react";
+// src/BibleViewer.jsx
+
+import React, { useState, useEffect, useRef } from "react";
 import styled from "styled-components";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import useBibleData from "./hooks/useBibleData";
+import { saveReadingProgress } from "./utils/db";
 import Footer from "./Footer";
 
 const Container = styled.div`
@@ -16,6 +19,9 @@ const Header = styled.div`
   max-width: 600px;
   width: 100%;
   position: fixed;
+  top: 0;
+  z-index: 100;
+  // background: linear-gradient(180deg, white 80%, transparent);
 `;
 
 const HeaderFlex = styled.div`
@@ -53,6 +59,7 @@ const NavButton = styled.button`
 
   &:disabled {
     cursor: not-allowed;
+    opacity: 0.5;
   }
 `;
 
@@ -101,66 +108,126 @@ const Select = styled.select`
   background-color: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   box-shadow: 0 0 4px 2px rgba(0, 0, 0, 0.05);
+  color: #333;
 
   &:hover {
     border-color: #ddd;
   }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `;
 
 const BibleViewer = () => {
-  // 훅을 사용하여 데이터 상태와 로딩 함수를 가져옵니다.
-  const { books, currentBookData, loadBook, isLoading } = useBibleData();
+  const { books, currentBookData, loadBook, isLoading, savedProgress } =
+    useBibleData();
 
-  // books 배열의 index (0~65)
+  // 저장된 진행 상태로 초기화
   const [currentBookIdx, setCurrentBookIdx] = useState(0);
-  // 현재 책 내의 chapter index
   const [currentChapterIdx, setCurrentChapterIdx] = useState(0);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // 현재 선택된 책의 '코드' (meta.json 기준)
+  const saveTimeoutRef = useRef(null);
+
   const currentBookCode = books[currentBookIdx]?.[0];
 
-  // 책이 바뀌면 (currentBookIdx 변경), 해당 책 데이터를 로드하는 효과
+  // 1. savedProgress가 로드되면 상태 복구
   useEffect(() => {
-    // books가 로드되고, 현재 책 코드가 유효할 때만 실행
-    if (currentBookCode !== undefined) {
-      loadBook(currentBookCode); // 캐시 또는 네트워크에서 로드
-      setCurrentChapterIdx(0); // 새 책 로딩 시 항상 1장으로 초기화
+    if (savedProgress !== null && !isInitialized) {
+      setCurrentBookIdx(savedProgress.bookIdx);
+      setCurrentChapterIdx(savedProgress.chapterIdx);
+      setIsInitialized(true);
+      console.log("✓ Restored reading state");
+    } else if (savedProgress === null && !isInitialized && !isLoading) {
+      // 첫 접속 (진행 상태 없음)
+      setIsInitialized(true);
+      console.log("✓ First visit, starting from beginning");
     }
-  }, [currentBookCode, loadBook]);
+  }, [savedProgress, isLoading, isInitialized]);
 
-  // 메타데이터 로딩 중이거나, 책 목록이 비어있을 때
+  // 2. 책 변경 시 데이터 로드
+  useEffect(() => {
+    if (currentBookCode !== undefined && isInitialized) {
+      loadBook(currentBookCode);
+    }
+  }, [currentBookCode, loadBook, isInitialized]);
+
+  // 3. 스크롤 저장 (디바운싱)
+  useEffect(() => {
+    const handleScroll = () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+      saveTimeoutRef.current = setTimeout(() => {
+        const scrollY = window.scrollY || document.documentElement.scrollTop;
+        saveReadingProgress(currentBookIdx, currentChapterIdx, scrollY);
+      }, 500);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [currentBookIdx, currentChapterIdx]);
+
+  // 4. 장 변경 시 상단으로 스크롤 + 위치 저장
+  useEffect(() => {
+    if (isInitialized) {
+      saveReadingProgress(currentBookIdx, currentChapterIdx, 0);
+      window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+    }
+  }, [currentChapterIdx, currentBookIdx, isInitialized]);
+
+  // 5. 데이터 로드 후 스크롤 위치 복구
+  useEffect(() => {
+    if (currentBookData && savedProgress?.scrollY > 0 && isInitialized) {
+      setTimeout(() => {
+        window.scrollTo({
+          top: savedProgress.scrollY,
+          left: 0,
+          behavior: "smooth",
+        });
+      }, 100);
+    }
+  }, [currentBookData, isInitialized, savedProgress]);
+
   if (isLoading || books.length === 0) {
-    return <Container>책 목록 데이터를 불러오는 중입니다.</Container>;
+    return <Container>책 목록을 불러오는 중입니다...</Container>;
   }
 
-  // 현재 책의 장(chapters)과 절(verses) 데이터
+  if (!isInitialized) {
+    return <Container>읽기 상태를 복구하는 중입니다...</Container>;
+  }
+
   const chapters = currentBookData?.chapters || [];
   const verses = chapters[currentChapterIdx] || [];
   const chaptersLength = chapters.length;
 
-  // 현재 책 데이터가 로딩되지 않았을 때 (책 선택 후 로딩 중일 때)
   if (!currentBookData) {
     return (
       <Container>
-        {books[currentBookIdx][1]} 데이터를 로딩 중입니다...
+        {books[currentBookIdx]?.[1]} 데이터를 로드 중입니다...
       </Container>
     );
   }
 
-  // --- 핸들러 함수 ---
   const handlePrevChapter = () => {
     if (currentChapterIdx > 0) {
       setCurrentChapterIdx(currentChapterIdx - 1);
-      window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
     }
   };
 
   const handleNextChapter = () => {
     if (currentChapterIdx < chaptersLength - 1) {
-      // chaptersLength 사용
       setCurrentChapterIdx(currentChapterIdx + 1);
-      window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
     }
+  };
+
+  const handleChangeBook = (e) => {
+    setCurrentBookIdx(Number(e.target.value));
+    setCurrentChapterIdx(0);
   };
 
   return (
@@ -168,10 +235,7 @@ const BibleViewer = () => {
       <Header>
         <HeaderFlex>
           <Selector>
-            <Select
-              value={currentBookIdx}
-              onChange={(e) => setCurrentBookIdx(Number(e.target.value))}
-            >
+            <Select value={currentBookIdx} onChange={handleChangeBook}>
               {books.map((book, idx) => (
                 <option key={idx} value={idx}>
                   {book[1]}
@@ -182,9 +246,8 @@ const BibleViewer = () => {
             <Select
               value={currentChapterIdx}
               onChange={(e) => setCurrentChapterIdx(Number(e.target.value))}
-              disabled={!currentBookData} // 책 데이터 로딩 전에는 장 선택 비활성화
+              disabled={!currentBookData}
             >
-              {/* chapters 배열 길이만큼 옵션 생성 */}
               {chapters.map((_, idx) => (
                 <option key={idx} value={idx}>
                   {idx + 1}장
@@ -203,7 +266,7 @@ const BibleViewer = () => {
 
             <NavButton
               onClick={handleNextChapter}
-              disabled={currentChapterIdx === chaptersLength - 1} // chaptersLength 사용
+              disabled={currentChapterIdx === chaptersLength - 1}
             >
               <ChevronRight size={20} />
             </NavButton>
@@ -224,4 +287,5 @@ const BibleViewer = () => {
     </Container>
   );
 };
+
 export default BibleViewer;
