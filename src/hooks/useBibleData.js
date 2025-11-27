@@ -1,79 +1,119 @@
 // src/hooks/useBibleData.js
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useRef } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { getBookFromDB, saveBookToDB, getReadingProgress } from "../utils/db";
+import {
+  initializeBooksFromHook,
+  setCurrentBookData,
+  setBookListLoading,
+  setBookDataLoading,
+  setProgressLoading,
+  setError,
+  restoreProgress,
+} from "../store/features/bibleSlice";
 
 const useBibleData = () => {
-  const [books, setBooks] = useState([]); // 모든 책 목록
-  const [currentBookData, setCurrentBookData] = useState(null); // 현재 책 데이터
-  const [isLoading, setIsLoading] = useState(true);
-  const [savedProgress, setSavedProgress] = useState(null); // 저장된 읽기 위치
+  const dispatch = useDispatch();
+  const { currentBookIdx, books } = useSelector((state) => state.bible);
 
-  // 1. 앱 시작: 메타데이터 + 저장된 진행 상태 로드
+  const hasInitRef = useRef(false);
+
+  // 1️⃣ 앱 시작: 메타데이터 로드 + progress 복구 (한 번만)
   useEffect(() => {
-    const initialize = async () => {
+    if (hasInitRef.current) return;
+    hasInitRef.current = true;
+
+    (async () => {
+      dispatch(setBookListLoading(true));
+      dispatch(setProgressLoading(true));
+
       try {
         // 메타데이터 로드
         const metaRes = await fetch("/data/meta.json");
+        if (!metaRes.ok) throw new Error("Failed to fetch meta.json");
         const metaData = await metaRes.json();
-        setBooks(metaData.books);
 
-        // DB에서 저장된 읽기 위치 로드
+        dispatch(initializeBooksFromHook(metaData.books));
+        console.log(`✓ useBibleData: Loaded ${metaData.books.length} books`);
+
+        // 🔴 수정: getReadingProgress를 직접 호출 (require 제거)
         const progress = await getReadingProgress();
-        setSavedProgress(progress);
+        console.log("✓ useBibleData: Progress data:", progress);
 
-        console.log("✓ App initialized");
+        if (progress) {
+          dispatch(restoreProgress(progress));
+          console.log(
+            `✓ useBibleData: Restored progress - book=${progress.bookIdx}, chapter=${progress.chapterIdx}`
+          );
+        } else {
+          console.log(
+            "⚠ useBibleData: No progress found, starting from beginning"
+          );
+        }
       } catch (err) {
-        console.error("Initialization error:", err);
+        console.error("useBibleData: Init error:", err);
+        dispatch(setError({ type: "INIT_ERROR", message: err.message }));
       } finally {
-        setIsLoading(false);
+        dispatch(setBookListLoading(false));
+        dispatch(setProgressLoading(false));
       }
-    };
+    })();
+  }, [dispatch]);
 
-    initialize();
-  }, []);
+  // 2️⃣ 책 데이터 로드 (currentBookIdx 변경시)
+  useEffect(() => {
+    if (!books || books.length === 0) return;
 
-  // 2. 책 데이터 로드 (캐싱)
-  const loadBook = useCallback(
-    async (bookCode) => {
-      if (currentBookData?.bookCode === bookCode) return;
+    const book = books[currentBookIdx];
+    if (!book) return;
 
-      setCurrentBookData(null);
+    const [bookCode, bookName] = book;
 
+    dispatch(setBookDataLoading(true));
+
+    (async () => {
       try {
-        // DB에서 먼저 확인
+        // 1. DB에서 먼저 확인
         let bookData = await getBookFromDB(bookCode);
-
         if (bookData) {
-          console.log(`✓ Book ${bookCode} loaded from cache`);
-          setCurrentBookData(bookData);
+          console.log(
+            `✓ useBibleData: ${bookName} from cache (${bookData.chapters.length} chapters)`
+          );
+          dispatch(setCurrentBookData(bookData));
+          dispatch(setBookDataLoading(false));
           return;
         }
 
-        // DB에 없으면 네트워크에서 로드
-        console.log(`Fetching book ${bookCode} from network...`);
+        // 2. 네트워크에서 로드
+        console.log(`⬇ useBibleData: Fetching ${bookName}...`);
         const res = await fetch(`/data/book_${bookCode}.json`);
-        if (!res.ok) throw new Error("Network response failed");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         bookData = await res.json();
 
-        // DB에 저장
+        // 3. DB에 저장
         await saveBookToDB(bookCode, bookData);
-        setCurrentBookData(bookData);
-      } catch (error) {
-        console.error(`Book ${bookCode} load failed:`, error);
-      }
-    },
-    [currentBookData]
-  );
+        dispatch(setCurrentBookData(bookData));
 
-  return {
-    books,
-    currentBookData,
-    loadBook,
-    isLoading,
-    savedProgress, // 저장된 읽기 위치 반환
-  };
+        console.log(
+          `✓ useBibleData: ${bookName} fetched (${bookData.chapters.length} chapters)`
+        );
+      } catch (error) {
+        console.error(`✗ useBibleData: Load ${bookCode} failed:`, error);
+        dispatch(
+          setError({
+            type: "BOOK_LOAD_ERROR",
+            message: `Failed to load ${bookCode}`,
+          })
+        );
+      } finally {
+        dispatch(setBookDataLoading(false));
+      }
+    })();
+  }, [currentBookIdx, books, dispatch]);
+
+  return null;
 };
 
 export default useBibleData;

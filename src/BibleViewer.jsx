@@ -1,10 +1,15 @@
 // src/BibleViewer.jsx
-
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import styled from "styled-components";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import useBibleData from "./hooks/useBibleData";
 import { saveReadingProgress } from "./utils/db";
+import {
+  setCurrentBookIdx,
+  setCurrentChapterIdx,
+} from "./store/features/bibleSlice";
+import { scrollToPosition } from "./utils/scrollUtils";
 import Footer from "./Footer";
 
 const Container = styled.div`
@@ -21,7 +26,7 @@ const Header = styled.div`
   position: fixed;
   top: 0;
   z-index: 100;
-  // background: linear-gradient(180deg, white 80%, transparent);
+  background: linear-gradient(180deg, white 80%, transparent);
 `;
 
 const HeaderFlex = styled.div`
@@ -99,7 +104,6 @@ const Selector = styled.div`
 const Select = styled.select`
   -webkit-appearance: none;
   -moz-appearance: none;
-
   padding: 12px 20px;
   border: 1px solid #fff;
   border-radius: 50px;
@@ -121,47 +125,36 @@ const Select = styled.select`
 `;
 
 const BibleViewer = () => {
-  const { books, currentBookData, loadBook, isLoading, savedProgress } =
-    useBibleData();
+  const dispatch = useDispatch();
+  const {
+    books,
+    currentBookIdx,
+    currentChapterIdx,
+    currentBookData,
+    isLoading,
+  } = useSelector((state) => state.bible);
 
-  // 저장된 진행 상태로 초기화
-  const [currentBookIdx, setCurrentBookIdx] = useState(0);
-  const [currentChapterIdx, setCurrentChapterIdx] = useState(0);
-  const [isInitialized, setIsInitialized] = useState(false);
+  useBibleData();
 
   const saveTimeoutRef = useRef(null);
+  const hasInitializedRef = useRef(false);
 
-  const currentBookCode = books[currentBookIdx]?.[0];
-
-  // 1. savedProgress가 로드되면 상태 복구
+  // 1️⃣ 초기화 완료
   useEffect(() => {
-    if (savedProgress !== null && !isInitialized) {
-      setCurrentBookIdx(savedProgress.bookIdx);
-      setCurrentChapterIdx(savedProgress.chapterIdx);
-      setIsInitialized(true);
-      console.log("✓ Restored reading state");
-    } else if (savedProgress === null && !isInitialized && !isLoading) {
-      // 첫 접속 (진행 상태 없음)
-      setIsInitialized(true);
-      console.log("✓ First visit, starting from beginning");
+    if (books.length > 0 && !hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+      console.log("✓ BibleViewer: Initialization complete");
     }
-  }, [savedProgress, isLoading, isInitialized]);
+  }, [books.length]);
 
-  // 2. 책 변경 시 데이터 로드
-  useEffect(() => {
-    if (currentBookCode !== undefined && isInitialized) {
-      loadBook(currentBookCode);
-    }
-  }, [currentBookCode, loadBook, isInitialized]);
-
-  // 3. 스크롤 저장 (디바운싱)
+  // 2️⃣ 스크롤 이벤트 - 500ms 후 현재 위치 저장
   useEffect(() => {
     const handleScroll = () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
       saveTimeoutRef.current = setTimeout(() => {
-        const scrollY = window.scrollY || document.documentElement.scrollTop;
-        saveReadingProgress(currentBookIdx, currentChapterIdx, scrollY);
+        // book과 chapter만 저장 (scrollY는 0으로 설정)
+        saveReadingProgress(currentBookIdx, currentChapterIdx, 0);
       }, 500);
     };
 
@@ -172,32 +165,20 @@ const BibleViewer = () => {
     };
   }, [currentBookIdx, currentChapterIdx]);
 
-  // 4. 장 변경 시 상단으로 스크롤 + 위치 저장
+  // 3️⃣ 장 변경 시 - 맨 위로 스크롤 + DB에 0 저장
   useEffect(() => {
-    if (isInitialized) {
-      saveReadingProgress(currentBookIdx, currentChapterIdx, 0);
-      window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
-    }
-  }, [currentChapterIdx, currentBookIdx, isInitialized]);
+    if (!hasInitializedRef.current) return;
 
-  // 5. 데이터 로드 후 스크롤 위치 복구
-  useEffect(() => {
-    if (currentBookData && savedProgress?.scrollY > 0 && isInitialized) {
-      setTimeout(() => {
-        window.scrollTo({
-          top: savedProgress.scrollY,
-          left: 0,
-          behavior: "smooth",
-        });
-      }, 100);
-    }
-  }, [currentBookData, isInitialized, savedProgress]);
+    scrollToPosition(0, "smooth");
+    saveReadingProgress(currentBookIdx, currentChapterIdx, 0);
+  }, [currentChapterIdx, currentBookIdx]);
 
-  if (isLoading || books.length === 0) {
+  // 로딩 상태 처리
+  if (isLoading.booksLoading || books.length === 0) {
     return <Container>책 목록을 불러오는 중입니다...</Container>;
   }
 
-  if (!isInitialized) {
+  if (!hasInitializedRef.current) {
     return <Container>읽기 상태를 복구하는 중입니다...</Container>;
   }
 
@@ -215,19 +196,18 @@ const BibleViewer = () => {
 
   const handlePrevChapter = () => {
     if (currentChapterIdx > 0) {
-      setCurrentChapterIdx(currentChapterIdx - 1);
+      dispatch(setCurrentChapterIdx(currentChapterIdx - 1));
     }
   };
 
   const handleNextChapter = () => {
     if (currentChapterIdx < chaptersLength - 1) {
-      setCurrentChapterIdx(currentChapterIdx + 1);
+      dispatch(setCurrentChapterIdx(currentChapterIdx + 1));
     }
   };
 
   const handleChangeBook = (e) => {
-    setCurrentBookIdx(Number(e.target.value));
-    setCurrentChapterIdx(0);
+    dispatch(setCurrentBookIdx(Number(e.target.value)));
   };
 
   return (
@@ -245,7 +225,9 @@ const BibleViewer = () => {
 
             <Select
               value={currentChapterIdx}
-              onChange={(e) => setCurrentChapterIdx(Number(e.target.value))}
+              onChange={(e) =>
+                dispatch(setCurrentChapterIdx(Number(e.target.value)))
+              }
               disabled={!currentBookData}
             >
               {chapters.map((_, idx) => (
