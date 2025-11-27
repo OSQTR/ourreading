@@ -11,6 +11,7 @@ const LayoutContainer = styled.div`
   position: fixed;
   top: 0;
   height: 100vh;
+  width: 100%;
   background-color: ${(props) => (props.isDarkMode ? "#1a1a1a" : "#fff")};
   color: ${(props) => (props.isDarkMode ? "#fff" : "#333")};
   transition: background-color 0.3s, color 0.3s;
