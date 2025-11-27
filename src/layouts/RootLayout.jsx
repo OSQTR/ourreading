@@ -8,6 +8,8 @@ import TabBar from "../components/TabBar";
 const LayoutContainer = styled.div`
   display: flex;
   flex-direction: column;
+  position: fixed;
+  top: 0;
   height: 100vh;
   background-color: ${(props) => (props.isDarkMode ? "#1a1a1a" : "#fff")};
   color: ${(props) => (props.isDarkMode ? "#fff" : "#333")};
