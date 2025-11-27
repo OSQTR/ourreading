@@ -1,8 +1,11 @@
 // src/store/features/uiSlice.js
 
 import { createSlice } from "@reduxjs/toolkit";
+import { loadUIState } from "../middleware/uiPersist";
 
-const initialState = {
+const savedUIState = loadUIState();
+
+const initialState = savedUIState || {
   currentTab: "read",
   fontSize: 16,
   fontFamily: "Noto Serif KR",

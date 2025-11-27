@@ -4,6 +4,7 @@ import { configureStore } from "@reduxjs/toolkit";
 import bibleReducer from "./features/bibleSlice";
 import uiReducer from "./features/uiSlice";
 import { loggerMiddleware } from "./middleware/logger";
+import { uiPersistMiddleware } from "./middleware/uiPersist";
 
 export const store = configureStore({
   reducer: {
@@ -11,6 +12,6 @@ export const store = configureStore({
     ui: uiReducer,
   },
   middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware().concat(loggerMiddleware),
+    getDefaultMiddleware().concat(uiPersistMiddleware),
   devTools: process.env.NODE_ENV !== "production",
 });

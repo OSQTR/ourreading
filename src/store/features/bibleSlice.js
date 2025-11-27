@@ -96,8 +96,15 @@ export const bibleSlice = createSlice({
     },
 
     // ==================== 스크롤 위치 관리 ====================
+    saveScrollPosition: (state, action) => {
+      const { bookIdx, chapterIdx, scrollY } = action.payload;
+      const key = `${bookIdx}:${chapterIdx}`;
+      state.scrollPositions[key] = scrollY;
+      console.log(`✓ Redux: Saved scroll position ${scrollY} for key ${key}`);
+    },
+
     resetScrollPosition: (state) => {
-      const key = `${state.currentBookIdx}-${state.currentChapterIdx}`;
+      const key = `${state.currentBookIdx}:${state.currentChapterIdx}`;
       state.scrollPositions[key] = 0;
     },
 
@@ -175,6 +182,8 @@ export const {
   setProgressLoading,
   setError,
   clearError,
+  saveScrollPosition,
+  resetScrollPosition,
   restoreProgress,
   updateCacheStats,
   incrementCachedCount,

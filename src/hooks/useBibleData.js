@@ -12,14 +12,16 @@ import {
   setError,
   restoreProgress,
 } from "../store/features/bibleSlice";
+import { scrollToPosition } from "../utils/scrollUtils";
 
 const useBibleData = () => {
   const dispatch = useDispatch();
   const { currentBookIdx, books } = useSelector((state) => state.bible);
 
   const hasInitRef = useRef(false);
+  const hasRestoredScrollRef = useRef(false);
 
-  // 1️⃣ 앱 시작: 메타데이터 로드 + progress 복구 (한 번만)
+  // 1️⃣ 앱 시작: 메타데이터 로드 (한 번만)
   useEffect(() => {
     if (hasInitRef.current) return;
     hasInitRef.current = true;
@@ -29,7 +31,7 @@ const useBibleData = () => {
       dispatch(setProgressLoading(true));
 
       try {
-        // 메타데이터 로드
+        console.log("🔄 useBibleData: Loading metadata...");
         const metaRes = await fetch("/data/meta.json");
         if (!metaRes.ok) throw new Error("Failed to fetch meta.json");
         const metaData = await metaRes.json();
@@ -37,22 +39,20 @@ const useBibleData = () => {
         dispatch(initializeBooksFromHook(metaData.books));
         console.log(`✓ useBibleData: Loaded ${metaData.books.length} books`);
 
-        // 🔴 수정: getReadingProgress를 직접 호출 (require 제거)
+        // DB에서 마지막 읽기 위치 복구 (book, chapter만)
         const progress = await getReadingProgress();
-        console.log("✓ useBibleData: Progress data:", progress);
-
         if (progress) {
           dispatch(restoreProgress(progress));
           console.log(
-            `✓ useBibleData: Restored progress - book=${progress.bookIdx}, chapter=${progress.chapterIdx}`
+            `✓ useBibleData: Restored progress - book=${progress.bookIdx}, chapter=${progress.chapterIdx}, scroll=${progress.scrollY}`
           );
         } else {
           console.log(
-            "⚠ useBibleData: No progress found, starting from beginning"
+            "ℹ useBibleData: No previous progress found, starting from Genesis 1"
           );
         }
       } catch (err) {
-        console.error("useBibleData: Init error:", err);
+        console.error("✗ useBibleData: Init error:", err);
         dispatch(setError({ type: "INIT_ERROR", message: err.message }));
       } finally {
         dispatch(setBookListLoading(false));
@@ -61,15 +61,24 @@ const useBibleData = () => {
     })();
   }, [dispatch]);
 
-  // 2️⃣ 책 데이터 로드 (currentBookIdx 변경시)
+  // 2️⃣ 책 데이터 로드 (currentBookIdx 변경시 - 매번 실행!)
   useEffect(() => {
-    if (!books || books.length === 0) return;
+    if (!books || books.length === 0) {
+      console.log("⏳ useBibleData: Waiting for books...");
+      return;
+    }
 
     const book = books[currentBookIdx];
-    if (!book) return;
+    if (!book) {
+      console.log("⏳ useBibleData: currentBookIdx out of range");
+      return;
+    }
 
     const [bookCode, bookName] = book;
 
+    console.log(
+      `📖 useBibleData: Loading ${bookName} (index: ${currentBookIdx})...`
+    );
     dispatch(setBookDataLoading(true));
 
     (async () => {
@@ -86,7 +95,7 @@ const useBibleData = () => {
         }
 
         // 2. 네트워크에서 로드
-        console.log(`⬇ useBibleData: Fetching ${bookName}...`);
+        console.log(`⬇ useBibleData: Fetching ${bookName} from network...`);
         const res = await fetch(`/data/book_${bookCode}.json`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
